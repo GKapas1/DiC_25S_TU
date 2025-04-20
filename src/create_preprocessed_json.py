@@ -2,9 +2,10 @@ import json
 import sys
 from Ass1_preproc import preprocess
 
-input_file = input_file = 'reviews_devset.json'
-output_file = 'preprocessed_reviews.json'
+input_file = input_file = 'data/reviews_devset.json'
+output_file = 'output/preprocessed_reviews.json'
 
+#converting json lines into preprocessed ones
 def input_lines():
     if input_file:
         return open(input_file, 'r', encoding='utf-8')

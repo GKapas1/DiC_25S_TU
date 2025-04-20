@@ -1,0 +1,9 @@
+[project]
+name = "dic-25s-tu"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "mrjob>=0.7.4",
+]
