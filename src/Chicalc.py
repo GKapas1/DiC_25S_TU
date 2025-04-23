@@ -8,10 +8,12 @@ class MRChiSquareCalculator(MRJob):
     def configure_args(self):
         super().configure_args()
         self.add_file_arg('--review-counts', help='Path to review_counts.txt')
+        self.add_file_arg('--term-counts', help='Path to total_term_counts.txt')
 
     def load_review_counts(self):
         self.total_reviews = 0
         self.category_reviews = {}
+        self.term_total_counts = {}
 
         with open(self.options.review_counts, 'r') as f:
             for line in f:
@@ -22,6 +24,13 @@ class MRChiSquareCalculator(MRJob):
                     self.total_reviews = value
                 elif key[0] == "CATEGORY":
                     self.category_reviews[key[1]] = value
+
+        with open(self.options.term_counts, 'r') as f:
+            for line in f:
+                key_part, value_part = line.strip().split('\t')
+                term = json.loads(key_part)
+                count = int(value_part)
+                self.term_total_counts[term] = count
 
     def steps(self):
         return [
@@ -42,15 +51,14 @@ class MRChiSquareCalculator(MRJob):
         N = self.total_reviews
 
         B = Nc - A
-        C = sum(
-            self.category_reviews.get(cat, 0)
-            for cat in self.category_reviews if cat != category
-        ) - A
+        C = self.term_total_counts.get(term, 0) - A
         D = N - A - B - C
 
         numerator = (A * D - B * C) ** 2
         denominator = (A + B) * (C + D) * (A + C) * (B + D)
         chi2 = (N * numerator / denominator) if denominator != 0 else 0
+
+        print(f"[DEBUG] Term: {term}, Category: {category}, A: {A}, B: {B}, C: {C}, D: {D}, Chi2: {chi2:.4f}")
 
         yield category, (term, chi2)
 

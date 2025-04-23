@@ -13,6 +13,8 @@ run("python3 src/Counting.py output/preprocessed_reviews.json > output/token_cat
 
 run("python3 src/Totalreview_count.py output/preprocessed_reviews.json > output/review_counts.txt")
 
-run("python3 src/Chicalc.py output/token_category_counts.txt --review-counts output/review_counts.txt > output/chi2_output.txt")
+run("python3 src/token_counter.py output/preprocessed_reviews.json > output/total_term_counts.txt")
+
+run("python3 src/Chicalc.py output/token_category_counts.txt --review-counts output/review_counts.txt --term-counts total_term_counts.txt> output/chi2_output.txt")
 
 run("python3 src/final_output.py")
