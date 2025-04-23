@@ -58,7 +58,7 @@ class MRChiSquareCalculator(MRJob):
         denominator = (A + B) * (C + D) * (A + C) * (B + D)
         chi2 = (N * numerator / denominator) if denominator != 0 else 0
 
-        print(f"[DEBUG] Term: {term}, Category: {category}, A: {A}, B: {B}, C: {C}, D: {D}, Chi2: {chi2:.4f}")
+        #print(f"[DEBUG] Term: {term}, Category: {category}, A: {A}, B: {B}, C: {C}, D: {D}, Chi2: {chi2:.4f}")
 
         yield category, (term, chi2)
 

@@ -13,7 +13,7 @@ class MRTokenCategoryCounter(MRJob):
                 for token in tokens:
                     yield (token, category), 1
         except:
-            pass  # Skip any malformed lines
+            pass  #skip any malformed lines
 
     def reducer(self, key, values):
         yield key, sum(values)
