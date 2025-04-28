@@ -1,20 +1,21 @@
 from mrjob.job import MRJob
 import json
 
-class MRCategoryReviewCounter(MRJob):
-    #helper function that counts total reviews per category and overall
+class CategoryCount(MRJob):
+
     def mapper(self, _, line):
         try:
             review = json.loads(line)
-            category = review.get("category")
-            if category:
-                yield ("CATEGORY", category), 1
-                yield ("TOTAL", "Overall"), 1
-        except:
-            pass
+            category = review.get('category', None)
 
-    def reducer(self, key, values):
-        yield key, sum(values)
+            if category:
+                yield category, 1
+
+        except Exception as e:
+            self.increment_counter('warn', 'bad_line', 1)
+
+    def reducer(self, category, counts):
+        yield category, sum(counts)
 
 if __name__ == '__main__':
-    MRCategoryReviewCounter.run()
+    CategoryCount.run()

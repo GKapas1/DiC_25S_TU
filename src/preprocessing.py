@@ -1,56 +1,51 @@
-import re
-import sys
+from mrjob.job import MRJob
 import json
+import re
 
-#loading stopwords
-def load_stopwords(filepath='stopwords.txt'):
-    with open(filepath, 'r', encoding='utf-8') as f:
-        stopwords = set(word.strip().lower() for word in f if word.strip())
-    return stopwords
+# Define your tokenization delimiters
+DELIMITERS = r'[\s\t\d\(\)\[\]\{\}\.!\?,;:+=\-_"]'+r"|\'|`|~|#|@|&|%|\*|\\/|\u20AC|\$|\u00A7"
 
-STOPWORDS = load_stopwords()
+# Load stopwords
+class PreprocessingJob(MRJob):
 
-#preprocessing for single text
-def preprocess(text:str):
-    #tokenizing based on the instructions
-    tokens = re.split(r'[\s\d()\[\]{}.!?,;:+=\-_"\'`~#@&*%€$§\\/]+', text)
+    def mapper_init(self):
+        # Load stopwords when mapper starts
+        self.stopwords = set()
+        try:
+            with open('stopwords.txt', 'r') as f:
+                for line in f:
+                    self.stopwords.add(line.strip().lower())
+        except Exception as e:
+            self.stopwords = set()
+            self.increment_counter('warn', 'missing_stopwords_file', 1)
 
-    #lowercase and filter
-    cleaned_tokens = [
-        token.lower() for token in tokens
-        if token and len(token) > 1 and token.lower() not in STOPWORDS
-    ]
+    def mapper(self, _, line):
+        try:
+            review = json.loads(line)
+            review_text = review.get('reviewText', '')
+            category = review.get('category', None)
 
-    return cleaned_tokens
+            if not category:
+                return
 
-def preprocess_reviews(input_path, output_path):
-    
-    with open(input_path, 'r', encoding='utf-8') as f_in, open(output_path, 'w', encoding='utf-8') as f_out:
-        for line in f_in:
-            try:
-                review = json.loads(line)
-                text = review.get('reviewText', '')
-                category = review.get('category', None)
+            # Case folding
+            review_text = review_text.lower()
 
-                if category and text:
-                    tokens = preprocess(text)
-                    if tokens:
-                        output = {
-                            "category": category,
-                            "tokens": tokens
-                        }
-                        f_out.write(json.dumps(output) + '\n')
-            except Exception:
-                continue  # skip malformed lines
+            # Tokenization
+            tokens = re.split(DELIMITERS, review_text)
 
+            # Filter tokens
+            filtered_tokens = [token for token in tokens if token and token not in self.stopwords and len(token) > 1]
+
+            # Output cleaned review
+            output = {
+                'category': category,
+                'tokens': filtered_tokens
+            }
+            yield None, json.dumps(output)
+
+        except Exception as e:
+            self.increment_counter('warn', 'bad_line', 1)
 
 if __name__ == '__main__':
-    sample_text = """
-    This was a gift for my other husband. He's making us things from it all the time!
-    Directions are simple, easy to read and interpret.
-    """
-    print(preprocess(sample_text))
-
-    input_path = 'data/reviews_devset.json'
-    output_path = 'output/preprocessed_reviews.json'
-    preprocess_reviews(input_path, output_path)
+    PreprocessingJob.run()

@@ -1,22 +1,33 @@
 from mrjob.job import MRJob
 import json
 
-class MRTokenCategoryCounter(MRJob):
-    #counting term occurencies per category
+class TokenCategoryCount(MRJob):
+
     def mapper(self, _, line):
         try:
-            review = json.loads(line)
-            category = review.get("category")
-            tokens = review.get("tokens", [])
+            # Handle tab-separated key \t value
+            if '\t' in line:
+                _, line = line.split('\t', 1)
 
-            if category:
+            # First decode JSON
+            data = json.loads(line)
+
+            # If still a string (double-encoded), decode again
+            if isinstance(data, str):
+                data = json.loads(data)
+
+            category = data.get("category", None)
+            tokens = data.get("tokens", [])
+
+            if category and tokens:
                 for token in tokens:
                     yield (token, category), 1
-        except:
-            pass  #skip any malformed lines
 
-    def reducer(self, key, values):
-        yield key, sum(values)
+        except Exception as e:
+            self.increment_counter('warn', 'bad_line', 1)
+
+    def reducer(self, token_category, counts):
+        yield token_category, sum(counts)
 
 if __name__ == '__main__':
-    MRTokenCategoryCounter.run()
+    TokenCategoryCount.run()

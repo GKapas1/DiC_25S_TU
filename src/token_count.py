@@ -2,17 +2,29 @@ from mrjob.job import MRJob
 import json
 
 class MRTotalTermCounts(MRJob):
-    #counting occurencies of tokens in the whole dataset
     def mapper(self, _, line):
-        data = json.loads(line)
-        category = data["category"]
-        tokens = set(data["tokens"])  # use set to count term per review
+        try:
+            # Handle Hadoop key-tab-value output
+            if '\t' in line:
+                _, line = line.split('\t', 1)
 
-        for token in tokens:
-            yield token, 1
+            # First json.loads() to get the string (if double-encoded)
+            data = json.loads(line)
 
-    def reducer(self, term, counts):
-        yield term, sum(counts)
+            # If it's still a string, load again
+            if isinstance(data, str):
+                data = json.loads(data)
+
+            tokens = data.get('tokens', [])
+
+            for token in tokens:
+                yield token, 1
+
+        except Exception as e:
+            self.increment_counter('warn', 'bad_line', 1)
+
+    def reducer(self, token, counts):
+        yield token, sum(counts)
 
 if __name__ == '__main__':
     MRTotalTermCounts.run()

@@ -1,34 +1,49 @@
 import json
+import argparse
 
-input_file = "output/chi2_output.txt"
-output_file = "output/output.txt"
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--input', default='output/merged_chi2_output.txt', help='Input file path')
+    parser.add_argument('--output', default='output/output.txt', help='Output file path')
+    args = parser.parse_args()
 
-category_lines = []
-unique_terms = set()
+    category_lines = []
+    unique_terms = set()
 
-with open(input_file, 'r') as f:
-    for line in f:
-        category, terms_json = line.strip().split('\t')
-        terms = json.loads(terms_json)
-        
-        formatted_terms = []
-        for term, score in terms:
-            formatted_terms.append(f"{term}:{score:.4f}")
-            unique_terms.add(term)
+    with open(args.input, 'r') as f:
+        for line in f:
+            if not line.strip():
+                continue
 
-        category_line = f"{category} {' '.join(formatted_terms)}"
-        category_lines.append((category, category_line))
+            parts = line.strip().split('\t')
+            if len(parts) != 2:
+                continue  # skip malformed lines
 
-#alphabetical category sort
-category_lines.sort(key=lambda x: x[0])
+            category, terms_str = parts
+            terms_list = terms_str.strip().split()
 
-#unique term sort alphabetically for the merged dictionary line
-merged_terms_line = ' '.join(sorted(unique_terms))
+            formatted_terms = []
+            for term_score in terms_list:
+                if ':' in term_score:
+                    term, score = term_score.rsplit(':', 1)
+                    formatted_terms.append(f"{term}:{score}")
+                    unique_terms.add(term)
 
-#document everyting to final output.txt
-with open(output_file, 'w') as f_out:
-    for _, line in category_lines:
-        f_out.write(line + '\n')
-    f_out.write(merged_terms_line + '\n')
+            category_line = f"{category} {' '.join(formatted_terms)}"
+            category_lines.append((category, category_line))
 
-print(f"Formatted output written to {output_file}")
+    # Sort categories alphabetically
+    category_lines.sort(key=lambda x: x[0])
+
+    # Sort unique terms alphabetically
+    merged_terms_line = ' '.join(sorted(unique_terms))
+
+    with open(args.output, 'w') as f_out:
+        for _, line in category_lines:
+            f_out.write(line + '\n')
+        f_out.write(merged_terms_line + '\n')
+
+    print(f"Formatted output written to {args.output}")
+
+if __name__ == '__main__':
+    main()
