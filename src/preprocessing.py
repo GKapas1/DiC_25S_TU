@@ -5,11 +5,10 @@ import re
 # Define your tokenization delimiters
 DELIMITERS = r'[\s\t\d\(\)\[\]\{\}\.!\?,;:+=\-_"]'+r"|\'|`|~|#|@|&|%|\*|\\/|\u20AC|\$|\u00A7"
 
-# Load stopwords
+
 class PreprocessingJob(MRJob):
 
     def mapper_init(self):
-        # Load stopwords when mapper starts
         self.stopwords = set()
         try:
             with open('stopwords.txt', 'r') as f:
@@ -19,33 +18,40 @@ class PreprocessingJob(MRJob):
             self.stopwords = set()
             self.increment_counter('warn', 'missing_stopwords_file', 1)
 
+        self.batch = []
+        self.batch_size = 1000  # Adjust depending on memory available
+
     def mapper(self, _, line):
         try:
             review = json.loads(line)
             review_text = review.get('reviewText', '')
-            category = review.get('category', None)
+            category = review.get('category')
 
             if not category:
                 return
 
-            # Case folding
             review_text = review_text.lower()
-
-            # Tokenization
             tokens = re.split(DELIMITERS, review_text)
-
-            # Filter tokens
             filtered_tokens = [token for token in tokens if token and token not in self.stopwords and len(token) > 1]
 
-            # Output cleaned review
             output = {
                 'category': category,
                 'tokens': filtered_tokens
             }
-            yield None, json.dumps(output)
+
+            self.batch.append(output)
+
+            if len(self.batch) >= self.batch_size:
+                for item in self.batch:
+                    yield None, json.dumps(item)
+                self.batch.clear()
 
         except Exception as e:
             self.increment_counter('warn', 'bad_line', 1)
+
+    def mapper_final(self):
+        for item in self.batch:
+            yield None, json.dumps(item)
 
 if __name__ == '__main__':
     PreprocessingJob.run()

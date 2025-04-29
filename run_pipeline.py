@@ -37,6 +37,9 @@ try:
 except:
     pass
 run(f"python3 src/token_category_count.py -r hadoop \
+    --jobconf mapreduce.map.memory.mb=4096 \
+    --jobconf mapreduce.reduce.memory.mb=4096 \
+    --jobconf mapreduce.job.reduces=10 \
     hdfs:///user/{USER}/preprocessed_reviews/part-* \
     --output-dir /user/{USER}/token_category_counts \
     --hadoop-streaming-jar /usr/lib/hadoop/tools/lib/hadoop-streaming-3.3.6.jar", step_name="Token-Category Count Step")
@@ -55,6 +58,9 @@ try:
 except:
     pass
 run(f"python3 src/token_count.py -r hadoop \
+    --jobconf mapreduce.job.reduces=10 \
+    --jobconf mapreduce.map.memory.mb=4096 \
+    --jobconf mapreduce.reduce.memory.mb=4096 \
     hdfs:///user/{USER}/preprocessed_reviews/part-* \
     --output-dir /user/{USER}/token_counts \
     --hadoop-streaming-jar /usr/lib/hadoop/tools/lib/hadoop-streaming-3.3.6.jar", step_name="Token Count Step")
