@@ -1,0 +1,1 @@
+Best Configuration:\n{'standardization': True, 'num_features': 2000, 'reg_param': 0.001, 'max_iter': 10, 'f1_score': 0.591754679487935}\nF1 Score on Test Set: 0.5792\n
