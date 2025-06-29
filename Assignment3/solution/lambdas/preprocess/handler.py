@@ -1,5 +1,16 @@
 import json
 import string
+import boto3
+import os
+from uuid import uuid4
+
+s3 = boto3.client(
+    "s3",
+    endpoint_url="http://localhost:4566",  # for LocalStack
+    aws_access_key_id="test",
+    aws_secret_access_key="test",
+    region_name="us-east-1"
+)
 
 def clean_text(text):
     text = text.lower()
@@ -9,24 +20,46 @@ def clean_text(text):
 
 def handler(event, context):
     try:
-        if isinstance(event, str):
-            event = json.loads(event)
+        # Extract bucket and key from the S3 event
+        record = event["Records"][0]
+        bucket = record["s3"]["bucket"]["name"]
+        key = record["s3"]["object"]["key"]
 
-        cleaned_reviews = []
+        # Fetch the uploaded review JSON
+        response = s3.get_object(Bucket=bucket, Key=key)
+        body = response["Body"].read().decode("utf-8")
+        review = json.loads(body)
 
-        for line in event:
-            cleaned = {
-                "reviewerID": line.get("reviewerID"),
-                "reviewerName": line.get("reviewerName"),
-                "asin": line.get("asin"),
-                "cleanedText": clean_text(line.get("reviewText", "")),
-                "summary": line.get("summary"),
-                "overall": line.get("overall"),
-                "category": line.get("category")
-            }
-            cleaned_reviews.append(cleaned)
+        # Process single review object
+        cleaned = {
+            "reviewerID": review.get("reviewerID"),
+            "reviewerName": review.get("reviewerName"),
+            "asin": review.get("asin"),
+            "reviewText": clean_text(review.get("reviewText", "")),
+            "summary": review.get("summary"),
+            "overall": review.get("overall"),
+            "category": review.get("category")
+        }
 
-        return {"cleaned": cleaned_reviews}
+        # Get output bucket name from SSM
+        ssm = boto3.client(
+            "ssm",
+            endpoint_url="http://localhost:4566",
+            aws_access_key_id="test",
+            aws_secret_access_key="test",
+            region_name="us-east-1"
+        )
+        param = ssm.get_parameter(Name="intermediate-bucket")
+        next_bucket = param["Parameter"]["Value"]
+
+        # Write cleaned review to output S3
+        s3.put_object(
+            Bucket=next_bucket,
+            Key=f"cleaned/reviews/{uuid4().hex}.json",
+            Body=json.dumps(cleaned)
+        )
+
+        return {"status": "success", "written_to": next_bucket}
 
     except Exception as e:
         return {"error": str(e)}
