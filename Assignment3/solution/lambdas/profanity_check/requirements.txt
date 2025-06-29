@@ -1,1 +1,1 @@
-profanity-check==1.0.3
+better-profanity==0.7.0
