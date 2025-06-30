@@ -1,11 +1,11 @@
 from better_profanity import profanity
 import json
 import boto3
-import os
 from uuid import uuid4
 
 profanity.load_censor_words()
 
+# S3 and SSM clients for LocalStack
 s3 = boto3.client(
     "s3",
     endpoint_url="http://host.docker.internal:4566",
@@ -32,25 +32,23 @@ def handler(event, context):
             response = s3.get_object(Bucket=bucket, Key=key)
             review = json.loads(response["Body"].read().decode("utf-8"))
 
-            # Check for profanity
-            text = review.get("reviewText", "")
-            if profanity.contains_profanity(text):
-                review["profanity"] = True
-            else:
-                review["profanity"] = False
+            # Flag if profane
+            review["profanity"] = profanity.contains_profanity(review.get("reviewText", ""))
 
-            # Output bucket from SSM
-            param = ssm.get_parameter(Name="output-bucket")
-            output_bucket = param["Parameter"]["Value"]
+            # Get flagged output bucket from SSM
+            param = ssm.get_parameter(Name="flagged-bucket")
+            flagged_bucket = param["Parameter"]["Value"]
+            key_out = f"flagged/{uuid4().hex}.json"
 
-            # Save flagged review (even if not profane, for full pipeline continuity)
+            print(f"Writing to {flagged_bucket}/{key_out}")
             s3.put_object(
-                Bucket=output_bucket,
-                Key=f"flagged/{uuid4().hex}.json",
+                Bucket=flagged_bucket,
+                Key=key_out,
                 Body=json.dumps(review)
             )
 
         return {"status": "done"}
 
     except Exception as e:
+        print("Error:", str(e))
         return {"error": str(e)}
