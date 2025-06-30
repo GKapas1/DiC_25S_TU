@@ -3,9 +3,6 @@ echo ===============================
 echo Running full review pipeline...
 echo ===============================
 
-REM Optional: activate virtual environment
-call ..\.venv\Scripts\activate
-
 echo.
 echo [1/3] Setting up resources...
 python setup_resources.py
