@@ -28,7 +28,6 @@ This project simulates an automated review moderation pipeline using AWS service
 
    This script will:
 
-   * Activate the virtual environment (if already present)
    * Set up all AWS resources and Lambda functions
    * Upload test reviews to S3
    * Collect and summarize final results
