@@ -3,6 +3,7 @@ import os
 import json
 import shutil
 from pathlib import Path
+import time
 
 LAMBDA_FUNCTIONS = [
     "preprocess",
@@ -93,28 +94,55 @@ def package_and_deploy_lambdas():
                     --runtime python3.11 \
                     --handler handler.handler \
                     --role arn:aws:iam::000000000000:role/execution_role \
-                    --zip-file fileb://{zip_path}"""
+                    --zip-file fileb://{zip_path} \
+                    --timeout 30"""
             )
         except subprocess.CalledProcessError as e:
             print(f"Function {name} already exists, updating...")
             run(f"""awslocal lambda update-function-code \
                 --function-name {name} \
                 --zip-file fileb://{zip_path}""")
+            if wait_until_lambda_ready(name):
+                run(f"""awslocal lambda update-function-configuration \
+                    --function-name {name} \
+                    --timeout 30""")
 
+
+def wait_until_lambda_ready(function_name, timeout=30):
+    for _ in range(timeout):
+        result = subprocess.run(
+            f"awslocal lambda get-function-configuration --function-name {function_name}",
+            shell=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
+        output = json.loads(result.stdout.decode("utf-8"))
+        if output.get("State") == "Active":
+            return True
+        time.sleep(1)
+    return False
 
 def setup_s3_trigger():
-    #S3 trigger to preprocessing Lambda
+    # Clear existing notification config using a temp file (Windows-safe)
+    with open("empty_notification.json", "w") as f:
+        f.write("{}")
+    run("awslocal s3api put-bucket-notification-configuration --bucket customer-reviews-input --notification-configuration file://empty_notification.json")
+    os.remove("empty_notification.json")
+
+    # Add the new trigger
     notification_json = '''{
-    "LambdaFunctionConfigurations": [{
-        "LambdaFunctionArn": "arn:aws:lambda:us-east-1:000000000000:function:preprocess",
-        "Events": ["s3:ObjectCreated:*"]
-    }]
+        "LambdaFunctionConfigurations": [{
+            "LambdaFunctionArn": "arn:aws:lambda:us-east-1:000000000000:function:preprocess",
+            "Events": ["s3:ObjectCreated:*"]
+        }]
     }'''
 
     with open("notification.json", "w") as f:
         f.write(notification_json)
+
     run("awslocal s3api put-bucket-notification-configuration --bucket customer-reviews-input --notification-configuration file://notification.json")
     os.remove("notification.json")
+
 
 def setup_profanity_trigger():
     notification_json = '''{
