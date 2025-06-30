@@ -41,7 +41,7 @@ def handler(event, context):
             "category": review.get("category")
         }
 
-        # Get output bucket name from SSM
+        # Get cleaned-reviews bucket from SSM
         ssm = boto3.client(
             "ssm",
             endpoint_url="http://host.docker.internal:4566",
@@ -50,15 +50,15 @@ def handler(event, context):
             region_name="us-east-1"
         )
         param = ssm.get_parameter(Name="intermediate-bucket")
-        next_bucket = param["Parameter"]["Value"]
+        cleaned_bucket = param["Parameter"]["Value"]
 
+        key_out = f"cleaned/reviews/{uuid4().hex}.json"
+        print(f"Writing to bucket: {cleaned_bucket}, key: {key_out}")
 
-        print(f"Writing to bucket: {next_bucket}, key: cleaned/reviews/{uuid4().hex}.json")
-        # Write cleaned review to output S3
         try:
             s3.put_object(
-                Bucket=next_bucket,
-                Key=f"cleaned/reviews/{uuid4().hex}.json",
+                Bucket=cleaned_bucket,
+                Key=key_out,
                 Body=json.dumps(cleaned)
             )
             print("Successfully wrote to S3.")
@@ -66,7 +66,7 @@ def handler(event, context):
             print("S3 write failed:", str(e))
 
         print("Cleaned review:", json.dumps(cleaned))
-        return {"status": "success", "written_to": next_bucket}
+        return {"status": "success", "written_to": cleaned_bucket}
 
     except Exception as e:
         return {"error": str(e)}

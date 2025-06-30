@@ -19,6 +19,8 @@ def run(cmd):
 def setup_buckets():
     run("awslocal s3 mb s3://customer-reviews-input")
     run("awslocal s3 mb s3://cleaned-reviews")
+    run("awslocal s3 mb s3://flagged-reviews")
+    run("awslocal s3 mb s3://sentiment-reviews-output")
     run("awslocal s3 mb s3://customer-reviews-output")
 
 def setup_dynamodb():
@@ -57,8 +59,11 @@ def setup_ssm():
 
     put_if_missing("input-bucket", "customer-reviews-input")
     put_if_missing("intermediate-bucket", "cleaned-reviews")
-    put_if_missing("output-bucket", "customer-reviews-output")
+    put_if_missing("flagged-bucket", "flagged-reviews")
+    put_if_missing("output-bucket", "sentiment-reviews-output")
     put_if_missing("banned-users-table", "banned-users")
+    put_if_missing("final-output-bucket", "customer-reviews-output")
+
 
 def package_and_deploy_lambdas():
     for name in LAMBDA_FUNCTIONS:
@@ -66,27 +71,20 @@ def package_and_deploy_lambdas():
         zip_path = path / "lambda.zip"
         package_path = path / "package"
 
-        # Clean up previous build
         shutil.rmtree(package_path, ignore_errors=True)
         if zip_path.exists():
             zip_path.unlink()
 
-        # Recreate package directory
         package_path.mkdir(parents=True, exist_ok=True)
 
-        # Install dependencies
         run(
             f"pip install -r {path}/requirements.txt -t {package_path} "
             f"--platform manylinux2014_x86_64 --only-binary=:all: --implementation cp --python-version 3.11 --abi cp311"
         )
 
-        # Copy lambda handler
         shutil.copy(path / "handler.py", package_path)
-
-        # Zip the package
         shutil.make_archive(base_name=zip_path.with_suffix(""), format="zip", root_dir=package_path)
 
-        # Deploy to LocalStack
         try:
             run(
                 f"""awslocal lambda create-function \
@@ -97,7 +95,7 @@ def package_and_deploy_lambdas():
                     --zip-file fileb://{zip_path} \
                     --timeout 30"""
             )
-        except subprocess.CalledProcessError as e:
+        except subprocess.CalledProcessError:
             print(f"Function {name} already exists, updating...")
             run(f"""awslocal lambda update-function-code \
                 --function-name {name} \
@@ -106,7 +104,6 @@ def package_and_deploy_lambdas():
                 run(f"""awslocal lambda update-function-configuration \
                     --function-name {name} \
                     --timeout 30""")
-
 
 def wait_until_lambda_ready(function_name, timeout=30):
     for _ in range(timeout):
@@ -123,13 +120,11 @@ def wait_until_lambda_ready(function_name, timeout=30):
     return False
 
 def setup_s3_trigger():
-    # Clear existing notification config using a temp file (Windows-safe)
     with open("empty_notification.json", "w") as f:
         f.write("{}")
     run("awslocal s3api put-bucket-notification-configuration --bucket customer-reviews-input --notification-configuration file://empty_notification.json")
     os.remove("empty_notification.json")
 
-    # Add the new trigger
     notification_json = '''{
         "LambdaFunctionConfigurations": [{
             "LambdaFunctionArn": "arn:aws:lambda:us-east-1:000000000000:function:preprocess",
@@ -139,10 +134,8 @@ def setup_s3_trigger():
 
     with open("notification.json", "w") as f:
         f.write(notification_json)
-
     run("awslocal s3api put-bucket-notification-configuration --bucket customer-reviews-input --notification-configuration file://notification.json")
     os.remove("notification.json")
-
 
 def setup_profanity_trigger():
     notification_json = '''{
@@ -162,13 +155,8 @@ def setup_profanity_trigger():
 
     with open("profanity_notification.json", "w") as f:
         f.write(notification_json)
-
-    run("awslocal s3api put-bucket-notification-configuration "
-        "--bucket cleaned-reviews "
-        "--notification-configuration file://profanity_notification.json")
-
+    run("awslocal s3api put-bucket-notification-configuration --bucket cleaned-reviews --notification-configuration file://profanity_notification.json")
     os.remove("profanity_notification.json")
-
 
 def setup_sentiment_trigger():
     notification_json = '''{
@@ -188,11 +176,7 @@ def setup_sentiment_trigger():
 
     with open("sentiment_notification.json", "w") as f:
         f.write(notification_json)
-
-    run("awslocal s3api put-bucket-notification-configuration "
-        "--bucket customer-reviews-output "
-        "--notification-configuration file://sentiment_notification.json")
-
+    run("awslocal s3api put-bucket-notification-configuration --bucket flagged-reviews --notification-configuration file://sentiment_notification.json")
     os.remove("sentiment_notification.json")
 
 def setup_ban_user_trigger():
@@ -204,7 +188,7 @@ def setup_ban_user_trigger():
           "Key": {
             "FilterRules": [{
               "Name": "prefix",
-              "Value": "flagged/"
+              "Value": "sentiment/"
             }]
           }
         }
@@ -213,13 +197,8 @@ def setup_ban_user_trigger():
 
     with open("ban_notification.json", "w") as f:
         f.write(notification_json)
-
-    run("awslocal s3api put-bucket-notification-configuration "
-        "--bucket customer-reviews-output "
-        "--notification-configuration file://ban_notification.json")
-
+    run("awslocal s3api put-bucket-notification-configuration --bucket sentiment-reviews-output --notification-configuration file://ban_notification.json")
     os.remove("ban_notification.json")
-
 
 def main():
     setup_buckets()
