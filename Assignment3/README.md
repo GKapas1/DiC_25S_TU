@@ -12,7 +12,7 @@ This project simulates an automated review moderation pipeline using AWS service
    ```bash
    python -m venv .venv
    .venv\Scripts\activate   # On Windows
-````
+   ```
 
 3. Install requirements:
 
